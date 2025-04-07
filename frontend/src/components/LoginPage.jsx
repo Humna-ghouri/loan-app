@@ -41,7 +41,7 @@ export default function LoginPage() {
       console.error('Login error:', error);
       let errorMessage = 'Login failed. Please try again.';
       
-      if (error.response?.data?.message) {
+      if (error.response && error.response.data && error.response.data.message) {
         errorMessage = error.response.data.message;
       }
 

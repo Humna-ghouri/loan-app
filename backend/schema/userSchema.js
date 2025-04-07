@@ -12,4 +12,3 @@ const validateUser = (data) => {
 };
 
 module.exports = validateUser;
-
