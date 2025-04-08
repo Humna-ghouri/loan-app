@@ -1,39 +1,42 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 
 const loanTypes = [
   {
     type: 'Wedding Loans',
     subcategories: ['Valima', 'Furniture', 'Valima Food', 'Jahez'],
-    maxAmount: 500000, // PKR 5 Lakh
-    loanPeriod: 3, // years
+    maxAmount: 500000,
+    loanPeriod: 3,
   },
   {
     type: 'Home Construction Loans',
     subcategories: ['Structure', 'Finishing', 'Loan'],
-    maxAmount: 1000000, // PKR 10 Lakh
-    loanPeriod: 5, // years
+    maxAmount: 1000000,
+    loanPeriod: 5,
   },
   {
     type: 'Business Startup Loans',
     subcategories: ['Buy Stall', 'Advance Rent for Shop', 'Shop Assets', 'Shop Machinery'],
-    maxAmount: 1000000, // PKR 10 Lakh
-    loanPeriod: 5, // years
+    maxAmount: 1000000,
+    loanPeriod: 5,
   },
   {
     type: 'Education Loans',
     subcategories: ['University Fees', 'Child Fees Loan'],
-    maxAmount: null, // Based on requirement
-    loanPeriod: 4, // years
+    maxAmount: null,
+    loanPeriod: 4,
   },
 ];
 
 const LoanCalculator = () => {
-  const [loanType, setLoanType] = useState(loanTypes[0]); // Default to the first loan type
+  const navigate = useNavigate();
+  const [loanType, setLoanType] = useState(loanTypes[0]);
   const [loanData, setLoanData] = useState({
     amount: '',
-    tenure: loanType.loanPeriod * 12, // Tenure in months
+    tenure: loanType.loanPeriod * 12,
     interestRate: 10,
-    subcategory: loanType.subcategories[0], // Default subcategory
+    subcategory: loanType.subcategories[0],
   });
   const [emi, setEmi] = useState(0);
 
@@ -68,6 +71,17 @@ const LoanCalculator = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     calculateEMI();
+    if (emi > 0) {
+      Swal.fire({
+        title: 'Loan Summary',
+        html: `<p>Monthly EMI: PKR ${emi}</p>`,
+        confirmButtonText: 'Proceed to Loan Request',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/loan-request', { state: { loanDetails: { ...loanData, emi } } });
+        }
+      });
+    }
   };
 
   return (
@@ -113,7 +127,7 @@ const LoanCalculator = () => {
             onChange={handleChange}
             className="w-full p-2 border border-gray-300 rounded"
             required
-            max={loanType.maxAmount || undefined} // Apply max if defined
+            max={loanType.maxAmount || undefined}
           />
           {loanType.maxAmount && (
             <p className="text-sm text-gray-500">Max: PKR {loanType.maxAmount}</p>
@@ -127,7 +141,7 @@ const LoanCalculator = () => {
             value={loanData.tenure}
             onChange={handleChange}
             className="w-full p-2 border border-gray-300 rounded"
-            readOnly // Make tenure read-only
+            readOnly
           />
         </div>
         <div>
@@ -149,12 +163,6 @@ const LoanCalculator = () => {
           Calculate EMI
         </button>
       </form>
-      {emi > 0 && (
-        <div className="mt-6 p-4 bg-gray-50 rounded">
-          <h2 className="font-bold mb-2">Loan Summary</h2>
-          <p>Monthly EMI: PKR {emi}</p>
-        </div>
-      )}
     </div>
   );
 };
