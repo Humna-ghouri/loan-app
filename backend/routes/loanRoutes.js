@@ -1,19 +1,12 @@
 // import express from 'express';
-// import { submitApplication, submitLoanDetails } from '../controllers/loanController.js';
-// import authenticate from '../Middlewares/authenticate.js';
+// // Import your loan controllers here
+// import { getLoans, createLoan, updateLoan, deleteLoan } from '../controllers/loanController.js';
 
 // const router = express.Router();
 
-// router.post('/submit', submitApplication);
-// router.post('/submit-details', authenticate, submitLoanDetails);
+// router.get('/', getLoans);
+// router.post('/', createLoan);
+// router.put('/:id', updateLoan);
+// router.delete('/:id', deleteLoan);
 
-// export default router;
-
-import express from 'express';
-import { submitLoanApplication } from '../controllers/authController.js';
-
-const router = express.Router();
-
-router.post('/submit', submitLoanApplication);
-
-export default router;
+// export default router; // This is the crucial line

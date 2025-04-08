@@ -1,45 +1,26 @@
-import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import userRoutes from './routes/userRoutes.js';
-import loanRoutes from './routes/loanRoutes.js';
+// // backend/app.mjs
+// import express from 'express';
+// import mongoose from 'mongoose';
+// import cors from 'cors';
+// import userRoutes from './routes/userRoutes.js';
+// import dotenv from 'dotenv';
 
-dotenv.config();
+// dotenv.config();
 
-const app = express();
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+// const MONGODB_URI = process.env.MONGODB_URI;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// app.use(cors());
+// app.use(express.json());
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// mongoose.connect(MONGODB_URI)
+//   .then(() => console.log('MongoDB connected'))
+//   .catch(err => console.error('MongoDB connection error:', err));
 
-// Routes
-app.use('/api/auth', userRoutes);
-app.use('/api/loans', loanRoutes);
+// app.use('/api/auth', userRoutes);
+// console.log("Routes Mounted : /api/auth"); //add this line
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Internal server error' 
-  });
-});
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Internal Server Error',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  });
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
