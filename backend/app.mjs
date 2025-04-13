@@ -1,29 +1,41 @@
+
+
 // import express from 'express';
-// import mongoose from 'mongoose';
 // import cors from 'cors';
 // import userRoutes from './routes/userRoutes.js';
+// import loanRoute from './routes/loanRoute.js';
 // import dotenv from 'dotenv';
-// import loanRequestRoutes from './routes/loanRoute.js'; // Import loan request routes
+// import connectDB from './db/db.js'; // Import your DB connection
+// import pdfRoutes from './routes/pdfRoutes.js';
 
 // dotenv.config();
 
 // const app = express();
 // const PORT = process.env.PORT || 5000;
-// const MONGODB_URI = process.env.MONGODB_URI;
 
-// app.use(cors());
+// // Initialize database connection
+// connectDB();
+
+// // CORS Configuration
+// app.use(
+//   cors({
+//     origin: 'http://localhost:5173', // MUST be the exact origin
+//     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+//     credentials: true, // Allow cookies, headers
+//     allowedHeaders: ['Content-Type', 'Authorization'],
+//   })
+// );
+
+// // Middleware
 // app.use(express.json());
-// app.use(express.urlencoded({ extended: true })); // Add this line for form data
+// app.use(express.urlencoded({ extended: true }));
 
-// mongoose.connect(MONGODB_URI)
-//   .then(() => console.log('MongoDB connected'))
-//   .catch(err => console.error('MongoDB connection error:', err));
-
+// // Routes
 // app.use('/api/auth', userRoutes);
-// console.log("Routes Mounted : /api/auth");
+// console.log('Routes Mounted : /api/auth');
 
-// app.use('/api/loan', loanRequestRoutes); // Integrate loan request routes
-// console.log("Routes Mounted : /api/loan"); //added this line
+// app.use('/api/loans', loanRoute);
+// console.log('Routes Mounted : /api/loans');
 
 // // Error handling middleware
 // app.use((err, req, res, next) => {
@@ -31,46 +43,75 @@
 //   res.status(500).json({ message: 'Something went wrong!' });
 // });
 
+// // Start server
 // app.listen(PORT, () => {
 //   console.log(`Server running on port ${PORT}`);
 // });
 
+
+// Add this at the top with other imports
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import userRoutes from './routes/userRoutes.js';
 import loanRoute from './routes/loanRoute.js';
+import pdfRoutes from './routes/pdfRoutes.js';
 import dotenv from 'dotenv';
+import connectDB from './db/db.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Configure __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI;
 
+// Database connection
+connectDB();
+
+// Middleware
 app.use(cors({
-    origin: 'http://localhost:5173',
-    credentials: true,
+  origin: 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+// Request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
+// Routes
 app.use('/api/auth', userRoutes);
-console.log('Routes Mounted : /api/auth');
-
 app.use('/api/loans', loanRoute);
-console.log('Routes Mounted : /api/loans');
+app.use('/api/pdf', pdfRoutes);
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    routes: ['/api/auth', '/api/loans', '/api/pdf'] 
+  });
+});
+
+// Error handling (must be last)
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log('Available routes:');
+  console.log('- GET /api/health');
+  console.log('- GET /api/pdf/test');
+  console.log('- GET /api/pdf/:loanId');
 });
