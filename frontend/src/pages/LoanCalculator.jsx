@@ -1,3 +1,5 @@
+// 
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -68,17 +70,48 @@ const LoanCalculator = () => {
     }
   };
 
+  const validateForm = () => {
+    if (!loanData.amount) {
+      Swal.fire('Error', 'Please enter loan amount', 'error');
+      return false;
+    }
+    if (loanType.maxAmount && loanData.amount > loanType.maxAmount) {
+      Swal.fire('Error', `Amount cannot exceed PKR ${loanType.maxAmount}`, 'error');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
+    
     calculateEMI();
     if (emi > 0) {
       Swal.fire({
         title: 'Loan Summary',
-        html: `<p>Monthly EMI: PKR ${emi}</p>`,
+        html: `
+          <div class="text-left">
+            <p><strong>Loan Type:</strong> ${loanType.type}</p>
+            <p><strong>Subcategory:</strong> ${loanData.subcategory}</p>
+            <p><strong>Amount:</strong> PKR ${loanData.amount}</p>
+            <p><strong>Tenure:</strong> ${loanData.tenure} months</p>
+            <p><strong>Interest Rate:</strong> ${loanData.interestRate}%</p>
+            <p class="mt-2"><strong>Monthly EMI:</strong> PKR ${emi}</p>
+          </div>
+        `,
         confirmButtonText: 'Proceed to Loan Request',
       }).then((result) => {
         if (result.isConfirmed) {
-          navigate('/loan-request', { state: { loanDetails: { ...loanData, emi } } });
+          navigate('/loan-request', { 
+            state: { 
+              loanDetails: { 
+                ...loanData, 
+                emi,
+                loanType: loanType.type 
+              } 
+            } 
+          });
         }
       });
     }

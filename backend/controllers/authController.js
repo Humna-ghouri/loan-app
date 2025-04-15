@@ -1,4 +1,4 @@
-import User from '../models/User.js';
+import User  from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
@@ -20,12 +20,14 @@ const transporter = nodemailer.createTransport({
 });
 
 export const signup = async (req, res) => {
-  console.log("Signup Request Recieved"); //add this line
+  console.log("Signup Request Received");
   try {
     const { name, email, password } = req.body;
     const { valid, reason, validators } = await emailValidator.validate(email);
     if (!valid) {
-      return res.status(400).json({ message: `Please provide a valid email address. ${reason}: ${validators[reason].reason}` });
+      return res.status(400).json({ 
+        message: `Please provide a valid email address. ${reason}: ${validators[reason].reason}` 
+      });
     }
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -35,12 +37,14 @@ export const signup = async (req, res) => {
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
     const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, { expiresIn: '1h' });
+    
     const mailOptions = {
       from: EMAIL_USER,
       to: email,
       subject: 'Welcome to LoanApp!',
       text: `Hello ${name}, welcome to LoanApp!`,
     };
+    
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         console.error('Email sending error:', error);
@@ -48,6 +52,7 @@ export const signup = async (req, res) => {
         console.log('Email sent:', info.response);
       }
     });
+    
     res.status(201).json({ token });
   } catch (error) {
     console.error('Signup error:', error);
@@ -71,5 +76,18 @@ export const signin = async (req, res) => {
   } catch (error) {
     console.error('Signin error:', error);
     res.status(500).json({ message: 'Signin failed' });
+  }
+};
+
+export const getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: 'Failed to get user' });
   }
 };

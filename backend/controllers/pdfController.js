@@ -1,3 +1,4 @@
+// File: controllers/pdfController.js
 import loanRequest from '../models/loanRequest.js';
 import mongoose from 'mongoose';
 import { generatePDF } from '../utils/pdfGenerator.js';
@@ -14,8 +15,10 @@ export const generateLoanPDF = async (req, res) => {
       });
     }
 
-    // Fetch loan details
-    const loan = await loanRequest.findById(loanRequestId).lean();
+    // Fetch loan details with additional fields
+    const loan = await loanRequest.findById(loanRequestId)
+      .select('+userPhoto +qrCode +loan_emi +city +country +guarantor1Email +guarantor1Location')
+      .lean();
     
     if (!loan) {
       return res.status(404).json({ 
@@ -24,7 +27,7 @@ export const generateLoanPDF = async (req, res) => {
       });
     }
 
-    // Generate PDF - ACTUALLY USING THE GENERATE FUNCTION NOW
+    // Generate PDF with the updated design
     const pdfBuffer = await generatePDF(loan);
 
     // Set proper PDF headers
