@@ -1,27 +1,32 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { pakistaniCities } from '../utils/cities';
+
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const LoanRequestForm = () => {
     const [formData, setFormData] = useState({
-        guarantor1Name: '',
-        guarantor1Email: '',
-        guarantor1Location: '',
-        guarantor1CNIC: '',
-        guarantor2Name: '',
-        guarantor2Email: '',
-        guarantor2Location: '',
-        guarantor2CNIC: '',
+        applicantName: '',
+        applicantEmail: '',
+        applicantCNIC: '',
+        guarantorName: '',
+        guarantorEmail: '',
+        guarantorLocation: '',
+        guarantorCNIC: '',
         address: '',
+        city: '',
+        country: 'Pakistan',
         phoneNumber: '',
-        appointmentDate: '', // ADDED THIS MISSING FIELD
+        appointmentDate: '',
         userPhoto: null,
         userPhotoUrl: '',
     });
 
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [userData, setUserData] = useState(null);
     const fileInputRef = useRef(null);
     const navigate = useNavigate();
 
@@ -31,22 +36,77 @@ const LoanRequestForm = () => {
         interestRate: 10,
     };
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
+    const fetchUserData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return navigate('/login');
+
+            const response = await axios.get(`${apiUrl}/api/auth/user`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.data) {
+                setUserData(response.data);
+                setFormData(prev => ({
+                    ...prev,
+                    applicantName: response.data.name || '',
+                    applicantEmail: response.data.email || ''
+                }));
+            }
+        } catch (error) {
+            console.error("Error fetching user data:", error);
+            if (error.response?.status === 401) {
+                localStorage.removeItem('token');
+                navigate('/login');
+            }
+        }
     };
 
-    const handleImageClick = () => {
-        fileInputRef.current.click();
+    useEffect(() => { fetchUserData(); }, [navigate]);
+
+    const validateForm = () => {
+        if (!/^\d{13}$/.test(formData.applicantCNIC)) {
+            Swal.fire('Error', 'Please enter a valid 13-digit CNIC', 'error');
+            return false;
+        }
+        if (!/^(\+92|0)[1-9]\d{9}$/.test(formData.phoneNumber)) {
+            Swal.fire('Error', 'Please enter a valid Pakistani phone number', 'error');
+            return false;
+        }
+        if (!formData.appointmentDate) {
+            Swal.fire('Error', 'Please select appointment date', 'error');
+            return false;
+        }
+        if (!formData.userPhoto) {
+            Swal.fire('Error', 'Please upload your photo', 'error');
+            return false;
+        }
+        if (!formData.city) {
+            Swal.fire('Error', 'Please select your city', 'error');
+            return false;
+        }
+        return true;
     };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleImageClick = () => fileInputRef.current.click();
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            setFormData((prev) => ({
+            if (file.size > 2 * 1024 * 1024) {
+                Swal.fire('Error', 'Image size should be less than 2MB', 'error');
+                return;
+            }
+            if (!file.type.match('image.*')) {
+                Swal.fire('Error', 'Please upload an image file', 'error');
+                return;
+            }
+            setFormData(prev => ({
                 ...prev,
                 userPhoto: file,
                 userPhotoUrl: URL.createObjectURL(file),
@@ -56,61 +116,44 @@ const LoanRequestForm = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!validateForm()) return;
+
         setIsSubmitting(true);
         setError('');
 
         try {
-            const formDataToSend = new FormData();
+            const token = localStorage.getItem('token');
+            if (!token) return navigate('/login');
 
-            // Append all text fields
-            Object.keys(formData).forEach(key => {
+            const formDataToSend = new FormData();
+            Object.entries(formData).forEach(([key, value]) => {
                 if (key !== 'userPhoto' && key !== 'userPhotoUrl') {
-                    formDataToSend.append(key, formData[key]);
+                    formDataToSend.append(key, value);
                 }
             });
-
-            // Append the file
-            if (formData.userPhoto) {
-                formDataToSend.append('userPhoto', formData.userPhoto);
-            }
+            formDataToSend.append('userPhoto', formData.userPhoto);
+            formDataToSend.append('amount', loanTerms.amount);
+            formDataToSend.append('tenure', loanTerms.tenure);
+            formDataToSend.append('interestRate', loanTerms.interestRate);
 
             const response = await axios.post(
-                'http://localhost:5000/api/loans/submit',
+                `${apiUrl}/api/loans/submit`,
                 formDataToSend,
                 {
-                    headers: {
+                    headers: { 
                         'Content-Type': 'multipart/form-data',
-                    },
-                    withCredentials: true,
+                        'Authorization': `Bearer ${token}`
+                    }
                 }
             );
 
-            await Swal.fire({
-                title: 'Success!',
-                text: 'Loan request submitted successfully',
-                icon: 'success',
-                confirmButtonText: 'OK'
-            });
-
-            navigate(response.data.redirectUrl, {
-                state: {
-                    loanId: response.data.loanId,
-                    loanDetails: loanTerms,
-                },
-            });
+            await Swal.fire('Success!', 'Loan submitted successfully', 'success');
+            navigate(`/slip-generation/${response.data.loanId}`);
+            
         } catch (err) {
-            let errorMsg = 'Failed to submit loan request';
-            if (err.response?.data?.message) {
-                errorMsg = err.response.data.message;
-            }
+            const errorMsg = err.response?.data?.message || 'Submission failed';
             setError(errorMsg);
-
-            await Swal.fire({
-                title: 'Error!',
-                text: errorMsg,
-                icon: 'error',
-                confirmButtonText: 'OK'
-            });
+            await Swal.fire('Error!', errorMsg, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -118,166 +161,265 @@ const LoanRequestForm = () => {
 
     return (
         <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold mb-6 text-center">Loan Request Form</h1>
+            <h1 className="text-2xl font-bold mb-6 text-center text-blue-700">Loan Application Form</h1>
 
-            {error && (
-                <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>
-            )}
+            {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
 
-            <div className="mb-4 p-4 bg-gray-100 rounded">
-                <h2 className="text-lg font-semibold mb-2">Loan Details</h2>
-                <p><strong>Loan Amount:</strong> {loanTerms.amount} PKR</p>
-                <p><strong>Loan Tenure:</strong> {loanTerms.tenure} months</p>
-                <p><strong>Interest Rate:</strong> {loanTerms.interestRate}%</p>
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <h2 className="text-lg font-semibold mb-3 text-blue-800">Loan Terms</h2>
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-white p-3 rounded border">
+                        <p className="text-gray-600">Amount</p>
+                        <p className="text-xl font-bold text-blue-600">{loanTerms.amount.toLocaleString()} PKR</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                        <p className="text-gray-600">Tenure</p>
+                        <p className="text-xl font-bold text-blue-600">{loanTerms.tenure} months</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                        <p className="text-gray-600">Interest Rate</p>
+                        <p className="text-xl font-bold text-blue-600">{loanTerms.interestRate}%</p>
+                    </div>
+                </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-                {/* Guarantor 1 Details */}
-                <div className="border p-4 rounded">
-                    <h2 className="text-lg font-semibold mb-2">Guarantor 1</h2>
-                    <label className="block mb-1">Name</label>
-                    <input
-                        type="text"
-                        name="guarantor1Name"
-                        value={formData.guarantor1Name}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                    <label className="block mb-1">Email</label>
-                    <input
-                        type="email"
-                        name="guarantor1Email"
-                        value={formData.guarantor1Email}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                    <label className="block mb-1">Location</label>
-                    <input
-                        type="text"
-                        name="guarantor1Location"
-                        value={formData.guarantor1Location}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                    <label className="block mb-1">CNIC</label>
-                    <input
-                        type="text"
-                        name="guarantor1CNIC"
-                        value={formData.guarantor1CNIC}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                </div>
-
-                {/* Guarantor 2 Details */}
-                <div className="border p-4 rounded">
-                    <h2 className="text-lg font-semibold mb-2">Guarantor 2</h2>
-                    <label className="block mb-1">Name</label>
-                    <input
-                        type="text"
-                        name="guarantor2Name"
-                        value={formData.guarantor2Name}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                    />
-                    <label className="block mb-1">Email</label>
-                    <input
-                        type="email"
-                        name="guarantor2Email"
-                        value={formData.guarantor2Email}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                    />
-                    <label className="block mb-1">Location</label>
-                    <input
-                        type="text"
-                        name="guarantor2Location"
-                        value={formData.guarantor2Location}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                    />
-                    <label className="block mb-1">CNIC</label>
-                    <input
-                        type="text"
-                        name="guarantor2CNIC"
-                        value={formData.guarantor2CNIC}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                    />
-                </div>
-
-                {/* Personal Information */}
-                <div className="col-span-2 border p-4 rounded">
-                    <label className="block mb-1">Address</label>
-                    <input
-                        type="text"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                    <label className="block mb-1">Phone Number</label>
-                    <input
-                        type="tel"
-                        name="phoneNumber"
-                        value={formData.phoneNumber}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                    />
-                    {/* ADDED APPOINTMENT DATE FIELD */}
-                    <label className="block mb-1">Appointment Date</label>
-                    <input
-                        type="date"
-                        name="appointmentDate"
-                        value={formData.appointmentDate}
-                        onChange={handleChange}
-                        className="w-full p-2 border border-gray-300 rounded"
-                        required
-                        min={new Date().toISOString().split('T')[0]} // Set min date to today
-                    />
-                </div>
-
-                {/* User Photo Upload */}
-                <div className="col-span-2 border p-4 rounded">
-                    <label className="block mb-1">User Photo</label>
-                    <div
-                        onClick={handleImageClick}
-                        className="w-[150px] h-[150px] border border-dashed border-gray-400 flex justify-center items-center cursor-pointer mb-2.5"
-                    >
-                        {formData.userPhotoUrl ? (
-                            <img
-                                src={formData.userPhotoUrl}
-                                alt="User Preview"
-                                className="max-w-full max-h-full"
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Applicant Section */}
+                <div className="border p-6 rounded-lg border-blue-100 bg-white">
+                    <h2 className="text-xl font-semibold mb-4 text-blue-700 border-b pb-2">Applicant Information</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Full Name</label>
+                            <input
+                                type="text"
+                                name="applicantName"
+                                value={formData.applicantName}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                readOnly={!!userData?.name}
                             />
-                        ) : (
-                            <span>Choose Image</span>
-                        )}
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Email</label>
+                            <input
+                                type="email"
+                                name="applicantEmail"
+                                value={formData.applicantEmail}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                readOnly={!!userData?.email}
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">CNIC (without dashes)</label>
+                            <input
+                                type="text"
+                                name="applicantCNIC"
+                                value={formData.applicantCNIC}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="4230112345678"
+                                required
+                                maxLength="13"
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Phone Number</label>
+                            <input
+                                type="tel"
+                                name="phoneNumber"
+                                value={formData.phoneNumber}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="03001234567"
+                                required
+                            />
+                        </div>
                     </div>
-                    <input
-                        type="file"
-                        name="userPhoto"
-                        onChange={handleFileChange}
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept="image/*"
-                        required
-                    />
                 </div>
 
-                <div className="col-span-2">
+                {/* Address Section */}
+                <div className="border p-6 rounded-lg border-blue-100 bg-white">
+                    <h2 className="text-xl font-semibold mb-4 text-blue-700 border-b pb-2">Address Information</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="block mb-2 text-gray-700 font-medium">Street Address</label>
+                            <input
+                                type="text"
+                                name="address"
+                                value={formData.address}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">City</label>
+                            <select
+                                name="city"
+                                value={formData.city}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            >
+                                <option value="">Select City</option>
+                                {pakistaniCities.map(city => (
+                                    <option key={city} value={city}>{city}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Country</label>
+                            <input
+                                type="text"
+                                name="country"
+                                value={formData.country}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                                readOnly
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Guarantor Section */}
+                <div className="border p-6 rounded-lg border-blue-100 bg-white">
+                    <h2 className="text-xl font-semibold mb-4 text-blue-700 border-b pb-2">Guarantor Information</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Full Name</label>
+                            <input
+                                type="text"
+                                name="guarantorName"
+                                value={formData.guarantorName}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Email</label>
+                            <input
+                                type="email"
+                                name="guarantorEmail"
+                                value={formData.guarantorEmail}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Location</label>
+                            <input
+                                type="text"
+                                name="guarantorLocation"
+                                value={formData.guarantorLocation}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">CNIC (without dashes)</label>
+                            <input
+                                type="text"
+                                name="guarantorCNIC"
+                                value={formData.guarantorCNIC}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="4230112345678"
+                                required
+                                maxLength="13"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Appointment Section */}
+                <div className="border p-6 rounded-lg border-blue-100 bg-white">
+                    <h2 className="text-xl font-semibold mb-4 text-blue-700 border-b pb-2">Appointment Details</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block mb-2 text-gray-700 font-medium">Appointment Date</label>
+                            <input
+                                type="date"
+                                name="appointmentDate"
+                                value={formData.appointmentDate}
+                                onChange={handleChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                min={new Date().toISOString().split('T')[0]}
+                            />
+                        </div>
+                        <div className="flex items-end">
+                            <div className="bg-blue-50 p-4 rounded-lg w-full">
+                                <p className="text-blue-800 font-medium">Documents Required:</p>
+                                <ul className="list-disc list-inside text-sm text-blue-700 mt-1">
+                                    <li>Original CNIC</li>
+                                    <li>Proof of Income</li>
+                                    <li>2 Passport Size Photos</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Photo Upload Section */}
+                <div className="border p-6 rounded-lg border-blue-100 bg-white">
+                    <h2 className="text-xl font-semibold mb-4 text-blue-700 border-b pb-2">Photo Upload</h2>
+                    <div className="flex flex-col items-center">
+                        <div
+                            onClick={handleImageClick}
+                            className="w-40 h-40 border-2 border-dashed border-blue-300 rounded-full flex justify-center items-center cursor-pointer mb-4 bg-blue-50 hover:bg-blue-100 transition-colors"
+                        >
+                            {formData.userPhotoUrl ? (
+                                <img
+                                    src={formData.userPhotoUrl}
+                                    alt="User Preview"
+                                    className="w-full h-full object-cover rounded-full"
+                                />
+                            ) : (
+                                <div className="text-center p-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-blue-500 font-medium mt-2 block">Upload Photo</span>
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-sm text-gray-500 text-center">Upload a clear passport-size photo (JPG/PNG, Max 2MB)</p>
+                        <input
+                            type="file"
+                            name="userPhoto"
+                            onChange={handleFileChange}
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            required
+                        />
+                    </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-2">
                     <button
                         type="submit"
-                        className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:bg-blue-400"
+                        className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 rounded-lg hover:from-blue-700 hover:to-blue-600 disabled:opacity-70 transition-all font-bold text-lg shadow-lg hover:shadow-xl flex items-center justify-center"
                         disabled={isSubmitting}
                     >
-                        {isSubmitting ? 'Submitting...' : 'Submit Request'}
+                        {isSubmitting ? (
+                            <>
+                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing Your Application...
+                            </>
+                        ) : (
+                            'Submit Loan Application'
+                        )}
                     </button>
                 </div>
             </form>

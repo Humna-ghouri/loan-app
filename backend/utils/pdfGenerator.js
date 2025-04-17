@@ -1,228 +1,105 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import axios from 'axios';
+import fs from 'fs';
+
+// Helper function to calculate EMI
+const calculateEMI = (principal, rate, tenure) => {
+  const monthlyRate = rate / 12 / 100;
+  const emi = principal * monthlyRate * Math.pow(1 + monthlyRate, tenure) / 
+             (Math.pow(1 + monthlyRate, tenure) - 1);
+  return emi.toFixed(2);
+};
+
+// Helper to download image for PDF
+const getImageBuffer = async (url) => {
+  try {
+    if (url.startsWith('http')) {
+      const response = await axios.get(url, { responseType: 'arraybuffer' });
+      return Buffer.from(response.data, 'binary');
+    } else if (fs.existsSync(`.${url}`)) {
+      return fs.readFileSync(`.${url}`);
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading image:', error);
+    return null;
+  }
+};
 
 export const generatePDF = async (loanData) => {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const doc = new PDFDocument({
-                size: 'A4',
-                margin: 30,
-                bufferPages: true,
-                info: {
-                    Title: `Loan Application - ${loanData.tokenNumber}`,
-                    Author: 'Premier Banking Solutions',
-                    Creator: 'Digital Loan System'
-                }
-            });
-
-            const buffers = [];
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => resolve(Buffer.concat(buffers)));
-            doc.on('error', reject);
-
-            // ======================
-            // 1. WATERMARK BACKGROUND
-            // ======================
-            doc.opacity(0.03)
-                .fillColor('#1565C0')
-                .rect(0, 0, doc.page.width, doc.page.height)
-                .fill()
-                .opacity(1);
-
-            // ======================
-            // 2. BANK LETTERHEAD
-            // ======================
-            // Bank logo placeholder (replace with actual image)
-            doc.fillColor('#0D47A1')
-                .rect(0, 0, doc.page.width, 80)
-                .fill();
-
-            doc.fillColor('white')
-                .font('Helvetica-Bold')
-                .fontSize(20)
-                .text('PREMIER BANK', 50, 30);
-
-            doc.font('Helvetica')
-                .fontSize(10)
-                .text('Digital Loan Application System', 50, 55);
-
-            // ======================
-            // 3. DOCUMENT ID BADGE
-            // ======================
-            const docId = loanData.tokenNumber || `L-${loanData._id.toString().slice(-8).toUpperCase()}`;
-
-            doc.fillColor('#0D47A1')
-                .roundedRect(400, 40, 150, 40, 5)
-                .fill();
-
-            doc.fillColor('white')
-                .font('Helvetica-Bold')
-                .fontSize(12)
-                .text('DOCUMENT ID', 410, 50, { width: 130, align: 'center' });
-
-            doc.fontSize(14)
-                .text(docId, 410, 65, { width: 130, align: 'center' });
-
-            // ======================
-            // 4. MAIN CONTENT AREA
-            // ======================
-            let yPosition = 120;
-
-            // Applicant Card
-            doc.fillColor('#E3F2FD')
-                .roundedRect(40, yPosition, 520, 120, 8) // Increased height to accommodate new fields
-                .fill();
-
-            doc.fillColor('#0D47A1')
-                .fontSize(16)
-                .text('APPLICANT INFORMATION', 60, yPosition + 20);
-
-            doc.fillColor('#424242')
-                .fontSize(11)
-                .text(`Name: ${loanData.applicantName || 'N/A'}`, 60, yPosition + 45)
-                .text(`Contact: ${loanData.phoneNumber || 'N/A'}`, 60, yPosition + 65)
-                .text(`Email: ${loanData.applicantEmail || 'N/A'}`, 60, yPosition + 85) // Added Email
-                .text(`City: ${loanData.city || 'N/A'}`, 60, yPosition + 105); // Added City
-
-            doc.text(`Address: ${loanData.address || 'N/A'}`, 250, yPosition + 45, { width: 280 })
-                .text(`Country: ${loanData.country || 'N/A'}`, 250, yPosition + 85, { width: 280 }); // Added Country
-
-            yPosition += 140; // Increased yPosition
-
-            // ======================
-            // 5. LOAN DETAILS CARDS
-            // ======================
-            // Two-column layout
-            doc.fillColor('#E3F2FD')
-                .roundedRect(40, yPosition, 250, 140, 8) // Increased height
-                .fill();
-
-            doc.fillColor('#0D47A1')
-                .fontSize(14)
-                .text('LOAN TERMS', 60, yPosition + 20);
-
-            doc.fillColor('#424242')
-                .fontSize(11)
-                .text(`Amount: ${loanData.amount || 0} PKR`, 60, yPosition + 45)
-                .text(`Tenure: ${loanData.tenure || 0} months`, 60, yPosition + 65)
-                .text(`Rate: ${loanData.interestRate || 0}% APR`, 60, yPosition + 85)
-                .text(`Purpose: ${loanData.purpose || 'General'}`, 60, yPosition + 105)
-                .text(`EMI: ${loanData.loan_emi || 'N/A'} PKR`, 60, yPosition + 125); // Added Monthly EMI
-
-            // Appointment Card
-            doc.fillColor('#E3F2FD')
-                .roundedRect(310, yPosition, 250, 120, 8)
-                .fill();
-
-            doc.fillColor('#0D47A1')
-                .fontSize(14)
-                .text('APPOINTMENT', 330, yPosition + 20);
-
-            doc.fillColor('#424242')
-                .fontSize(11)
-                .text(`Date: ${loanData.formattedAppointmentDate || 'Pending'}`, 330, yPosition + 45)
-                .text(`Time: ${loanData.formattedAppointmentTime || '10:00 AM'}`, 330, yPosition + 65)
-                .text(`Branch: Main Banking Center`, 330, yPosition + 85)
-                .text(`Officer: Loan Specialist`, 330, yPosition + 105);
-
-            yPosition += 170; // Increased yPosition
-
-            // ======================
-            // 6. GUARANTORS SECTION
-            // ======================
-            doc.fillColor('#0D47A1')
-                .fontSize(16)
-                .text('GUARANTOR DETAILS', 40, yPosition);
-
-            yPosition += 30;
-
-            // Guarantor 1 Card
-            doc.fillColor('#F5F5F5')
-                .roundedRect(40, yPosition, 250, 100, 6)
-                .fill();
-
-            doc.fillColor('#0D47A1')
-                .fontSize(12)
-                .text('PRIMARY GUARANTOR', 60, yPosition + 15);
-
-            doc.fillColor('#424242')
-                .fontSize(10)
-                .text(loanData.guarantor1Name || 'N/A', 60, yPosition + 35)
-                .text(`CNIC: ${loanData.guarantor1CNIC || 'N/A'}`, 60, yPosition + 55)
-                .text(`Contact: ${loanData.guarantor1Phone || 'N/A'}`, 60, yPosition + 75);
-
-            // Guarantor 2 Card
-            doc.fillColor('#F5F5F5')
-                .roundedRect(310, yPosition, 250, 100, 6)
-                .fill();
-
-            doc.fillColor('#0D47A1')
-                .fontSize(12)
-                .text('SECONDARY GUARANTOR', 330, yPosition + 15);
-
-            doc.fillColor('#424242')
-                .fontSize(10)
-                .text(loanData.guarantor2Name || 'N/A', 330, yPosition + 35)
-                .text(`CNIC: ${loanData.guarantor2CNIC || 'N/A'}`, 330, yPosition + 55)
-                .text(`Contact: ${loanData.guarantor2Phone || 'N/A'}`, 330, yPosition + 75);
-
-            yPosition += 130;
-
-            // ======================
-            // 7. QR CODE & BARCODE
-            // ======================
-            if (loanData.tokenNumber) {
-                try {
-                    // Generate QR Code
-                    const qrCode = await QRCode.toBuffer(loanData.tokenNumber, {
-                        errorCorrectionLevel: 'H',
-                        margin: 2,
-                        width: 120
-                    });
-
-                    // QR Code Container
-                    doc.fillColor('#E3F2FD')
-                        .roundedRect(400, yPosition, 150, 180, 8)
-                        .fill();
-
-                    doc.image(qrCode, 415, yPosition + 20, { width: 120 });
-
-                    doc.fillColor('#0D47A1')
-                        .fontSize(10)
-                        .text('VERIFICATION CODE', 400, yPosition + 150, {
-                            width: 150,
-                            align: 'center'
-                        });
-
-                    doc.fillColor('#424242')
-                        .fontSize(8)
-                        .text(loanData.tokenNumber, 400, yPosition + 165, {
-                            width: 150,
-                            align: 'center'
-                        });
-                } catch (error) {
-                    console.error('QR Generation Error:', error);
-                }
-            }
-
-            // ======================
-            // 8. FOOTER & SECURITY
-            // ======================
-            doc.fillColor('#616161')
-                .fontSize(8)
-                .text('This is a computer-generated document that does not require a signature.', 40, 750, {
-                    width: 500,
-                    align: 'center'
-                });
-
-            doc.text(`Document generated on: ${new Date().toLocaleString()} | System ID: ${Math.random().toString(36).substring(2, 10).toUpperCase()}`, 40, 770, {
-                width: 500,
-                align: 'center'
-            });
-
-            doc.end();
-        } catch (error) {
-            reject(error);
-        }
+  return new Promise(async (resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 30,
+      bufferPages: true
     });
+
+    const buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    // Calculate EMI
+    const emi = calculateEMI(
+      loanData.amount || 50000,
+      loanData.interestRate || 10,
+      loanData.tenure || 12
+    );
+
+    // Header
+    doc.fillColor('#0D47A1')
+       .rect(0, 0, doc.page.width, 80)
+       .fill()
+       .fillColor('white')
+       .font('Helvetica-Bold')
+       .fontSize(20)
+       .text('LOAN APPLICATION', 50, 30);
+
+    // Applicant Photo
+    if (loanData.userPhoto) {
+      try {
+        const imgBuffer = await getImageBuffer(loanData.userPhoto);
+        if (imgBuffer) {
+          doc.image(imgBuffer, 450, 100, {
+            width: 80,
+            height: 80,
+            fit: [80, 80],
+            align: 'center'
+          });
+        }
+      } catch (error) {
+        console.error('Error loading applicant photo:', error);
+      }
+    }
+
+    // Loan Details
+    doc.fillColor('#424242')
+       .fontSize(12)
+       .text('LOAN DETAILS', 50, 120)
+       .text(`Amount: ${loanData.amount || 0} PKR`, 50, 140)
+       .text(`Tenure: ${loanData.tenure || 0} months`, 50, 160)
+       .text(`Interest Rate: ${loanData.interestRate || 0}%`, 50, 180)
+       .text(`Monthly EMI: ${emi} PKR`, 50, 200, { underline: true });
+
+    // Applicant Information
+    doc.text('APPLICANT INFORMATION', 50, 240)
+       .text(`Name: ${loanData.applicantName || 'N/A'}`, 50, 260)
+       .text(`CNIC: ${loanData.applicantCNIC || 'N/A'}`, 50, 280);
+
+    // QR Code
+    if (loanData.tokenNumber) {
+      try {
+        const qrBuffer = await QRCode.toBuffer(loanData.tokenNumber, {
+          width: 120,
+          margin: 2
+        });
+        doc.image(qrBuffer, 450, 200, { width: 100 });
+      } catch (error) {
+        console.error('QR code generation failed:', error);
+      }
+    }
+
+    doc.end();
+  });
 };
