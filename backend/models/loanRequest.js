@@ -21,7 +21,6 @@ const loanRequestSchema = new mongoose.Schema({
         default: 10,
         required: true
     },
-    // Applicant Information
     applicantName: {
         type: String,
         required: true
@@ -36,7 +35,6 @@ const loanRequestSchema = new mongoose.Schema({
         required: true,
         match: [/^\d{13}$/, 'CNIC must be 13 digits']
     },
-    // Guarantor Information
     guarantorName: {
         type: String,
         required: true
@@ -55,7 +53,6 @@ const loanRequestSchema = new mongoose.Schema({
         required: true,
         match: [/^\d{13}$/, 'CNIC must be 13 digits']
     },
-    // Address Information
     address: {
         type: String,
         required: true
@@ -74,7 +71,6 @@ const loanRequestSchema = new mongoose.Schema({
         required: true,
         match: [/^(\+92|0)[1-9]\d{9}$/, 'Please use a valid Pakistani phone number']
     },
-    // Documents
     userPhoto: {
         type: String,
         required: true
@@ -103,7 +99,7 @@ const loanRequestSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Virtual for formatted appointment date
+// Virtuals
 loanRequestSchema.virtual('formattedAppointmentDate').get(function() {
     return this.appointmentDate?.toLocaleDateString('en-US', {
         year: 'numeric',
@@ -112,12 +108,10 @@ loanRequestSchema.virtual('formattedAppointmentDate').get(function() {
     }) || 'Not specified';
 });
 
-// Virtual for formatted appointment time
 loanRequestSchema.virtual('formattedAppointmentTime').get(function() {
     return '10:00 AM - 3:00 PM';
 });
 
-// Calculate monthly installment
 loanRequestSchema.virtual('loan_emi').get(function() {
     const principal = this.amount;
     const rate = this.interestRate / 100 / 12;
@@ -128,5 +122,8 @@ loanRequestSchema.virtual('loan_emi').get(function() {
     
     return emi.toFixed(2);
 });
+
+// ✅ Fix OverwriteModelError
+mongoose.models.LoanRequest && delete mongoose.models.LoanRequest;
 
 export default mongoose.model('LoanRequest', loanRequestSchema);

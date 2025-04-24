@@ -18,8 +18,12 @@ const userSchema = new mongoose.Schema({
   password: { 
     type: String, 
     required: true,
-    minlength: 8,
+    minlength: 6,
     select: false
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
   }
 }, { timestamps: true });
 
@@ -38,6 +42,17 @@ userSchema.pre('save', async function(next) {
 
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  try {
+    if (!this.password) {
+      throw new Error('User password not found');
+    }
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    console.error('Password comparison error:', error);
+    throw error;
+  }
 };
-export default mongoose.model('User', userSchema);
+
+// Create and export the model
+const User = mongoose.model('User', userSchema);
+export { User };

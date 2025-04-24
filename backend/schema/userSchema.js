@@ -10,5 +10,3 @@ const validateUser = (data) => {
 
   return schema.validate(data);
 };
-
-module.exports = validateUser;

@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { AuthContext } from '../App';
+
 axios.defaults.baseURL = 'http://localhost:5000';
 
-const SignUp = ({ setIsLoggedIn }) => {
+const SignUp = () => {
+  const { login } = useContext(AuthContext);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -41,16 +44,27 @@ const SignUp = ({ setIsLoggedIn }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await axios.post('/api/auth/signup', formData);
-      localStorage.setItem('token', response.data.token);
-      setIsLoggedIn(true);
+      const response = await axios.post('/api/auth/signup', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      });
+      
+      login(response.data.token, response.data.user);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Signup Successful!',
+        text: 'Welcome to our platform. A welcome email has been sent to your address.',
+      });
+      
       navigate('/loan-calculator');
     } catch (error) {
       console.error('Signup error:', error);
       Swal.fire({
         icon: 'error',
         title: 'Signup Failed',
-        text: error.response?.data?.message || 'Signup failed',
+        text: error.response?.data?.message || 'Signup failed. Please try again.',
       });
     } finally {
       setIsSubmitting(false);
@@ -119,6 +133,9 @@ const SignUp = ({ setIsLoggedIn }) => {
           {isSubmitting ? 'Signing Up...' : 'Sign Up'}
         </button>
       </form>
+      <div className="mt-4 text-center">
+        <p>Already have an account? <a href="/signin" className="text-blue-600 hover:underline">Sign In</a></p>
+      </div>
     </div>
   );
 };

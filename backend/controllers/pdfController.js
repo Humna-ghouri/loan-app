@@ -1,4 +1,4 @@
-import LoanRequest from '../models/LoanRequest.js';
+// import LoanRequest from '../models/LoanRequest.js';
 import mongoose from 'mongoose';
 import { generatePDF } from '../utils/pdfGenerator.js';
 
